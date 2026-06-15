@@ -118,11 +118,13 @@ const exportBtn = document.getElementById('export-btn');
 const searchBtn = document.getElementById('search-btn');
 const sweepBtn = document.getElementById('sweep-btn');
 const jobSweepBtn = document.getElementById('job-sweep-btn');
+const allBtn = document.getElementById('all-btn');
 
 function setBusy(busy) {
   searchBtn.disabled = busy;
   if (sweepBtn) sweepBtn.disabled = busy;
   if (jobSweepBtn) jobSweepBtn.disabled = busy;
+  if (allBtn) allBtn.disabled = busy;
 }
 
 if (moreBtn) moreBtn.hidden = true; // no pagination in the browser version
@@ -186,7 +188,7 @@ function resolveCategory(category) {
   return { tags: null, nameTerm: safe };
 }
 
-function buildOverpassQuery({ tags, nameTerm }, bbox) {
+function buildOverpassQuery({ tags, nameTerm }, bbox, limit = 600) {
   const [s, w, n, e] = bbox;
   const box = `(${s},${w},${n},${e})`;
   let lines = '';
@@ -196,7 +198,7 @@ function buildOverpassQuery({ tags, nameTerm }, bbox) {
     for (const k of ['shop', 'amenity', 'craft', 'office'])
       lines += `  nwr["name"~"${nameTerm}",i]["${k}"]${box};\n`;
   }
-  return `[out:json][timeout:60];\n(\n${lines});\nout tags center 600;`;
+  return `[out:json][timeout:90];\n(\n${lines});\nout tags center ${limit};`;
 }
 
 async function geocodeArea(area) {
@@ -473,6 +475,67 @@ async function runJobSweep() {
 }
 
 jobSweepBtn.addEventListener('click', runJobSweep);
+
+// Find EVERYTHING: all trades across all major cities, pooled into one list.
+// Uses ONE combined query per city (all trade tags unioned) — 12 requests total.
+async function runEverything() {
+  currentQuery = { category: 'everything', area: 'all SA metros' };
+  setBusy(true);
+  leads = [];
+  renderLeads();
+
+  // Collect every trade's tags into a single de-duplicated filter list.
+  const seenTag = new Set();
+  const allTags = [];
+  for (const job of JOB_TYPES) {
+    for (const t of resolveCategory(job).tags || []) {
+      const key = t.join('=');
+      if (!seenTag.has(key)) {
+        seenTag.add(key);
+        allTags.push(t);
+      }
+    }
+  }
+
+  const seen = new Set();
+  let scannedTotal = 0;
+  try {
+    for (let i = 0; i < CITIES.length; i++) {
+      const city = CITIES[i];
+      setStatus(`Finding everything in ${city.name}… (${i + 1}/${CITIES.length}) — ${leads.length} leads so far`);
+
+      let data;
+      try {
+        data = await queryOverpass(buildOverpassQuery({ tags: allTags, nameTerm: null }, city.bbox, 2500));
+      } catch {
+        continue; // busy mirror — skip this city and keep going
+      }
+
+      const elements = data.elements || [];
+      scannedTotal += elements.length;
+      for (const lead of elementsToLeads(elements)) {
+        const id = leadId(lead);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        lead.city = city.name;
+        leads.push(lead);
+      }
+      renderLeads();
+      scanNote.textContent = `(checked ${scannedTotal} businesses across ${i + 1} cities)`;
+
+      if (i < CITIES.length - 1) await sleep(1500);
+    }
+    setStatus(
+      leads.length
+        ? null
+        : 'No leads found — the free servers may be busy. Wait a minute and try again.'
+    );
+  } finally {
+    setBusy(false);
+  }
+}
+
+allBtn.addEventListener('click', runEverything);
 
 exportBtn.addEventListener('click', () => {
   if (leads.length === 0) return;
