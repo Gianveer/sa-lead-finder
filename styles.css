@@ -83,6 +83,8 @@ button.ghost {
   flex-wrap: wrap;
 }
 .sweep-row .muted { font-size: 0.82rem; }
+.auto-verify { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--muted); cursor: pointer; }
+.auto-verify input { width: 16px; height: 16px; accent-color: var(--accent-2); cursor: pointer; }
 .sweep-hint { font-size: 0.8rem; margin: 8px 0 0; line-height: 1.5; }
 
 .status {

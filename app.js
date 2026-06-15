@@ -121,6 +121,7 @@ const jobSweepBtn = document.getElementById('job-sweep-btn');
 const allBtn = document.getElementById('all-btn');
 const verifyBtn = document.getElementById('verify-btn');
 const sortSelect = document.getElementById('sort-select');
+const autoVerifyEl = document.getElementById('auto-verify');
 
 function setBusy(busy) {
   searchBtn.disabled = busy;
@@ -405,6 +406,8 @@ async function runSearch() {
     } else {
       setStatus(null);
     }
+
+    await maybeAutoVerify();
   } catch (err) {
     setStatus(`Something went wrong: ${err.message}`, true);
   } finally {
@@ -468,6 +471,7 @@ async function runSweep() {
         ? null
         : 'No website-less businesses found in the swept cities. Try a more common business type.'
     );
+    await maybeAutoVerify();
   } finally {
     setBusy(false);
   }
@@ -539,6 +543,7 @@ async function runJobSweep() {
         ? null
         : `No website-less businesses found in ${area}. Try a bigger city.`
     );
+    await maybeAutoVerify();
   } finally {
     setBusy(false);
   }
@@ -589,6 +594,7 @@ async function runEverything() {
         ? null
         : 'No leads found — the free servers may be busy. Wait a minute and try again.'
     );
+    await maybeAutoVerify();
   } finally {
     setBusy(false);
   }
@@ -696,6 +702,20 @@ async function verifyDomains() {
   } finally {
     setBusy(false);
   }
+}
+
+// After a search/sweep finishes, optionally check domains automatically.
+// Skipped for very large lists so we don't fire thousands of DNS lookups
+// unprompted — the user can still tap "Verify no website" for those.
+async function maybeAutoVerify() {
+  if (!autoVerifyEl || !autoVerifyEl.checked || !leads.length) return;
+  const AUTO_CAP = 400;
+  const pending = leads.filter((l) => !l.domainStatus || l.domainStatus === 'unknown').length;
+  if (pending > AUTO_CAP) {
+    setStatus(`${leads.length} leads found — too many to auto-check. Tap 🔍 Verify no website when ready.`);
+    return;
+  }
+  await verifyDomains();
 }
 
 if (verifyBtn) verifyBtn.addEventListener('click', verifyDomains);
