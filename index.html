@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>SA Lead Finder — Businesses with no website</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="topbar">
+      <div class="wrap">
+        <h1>SA Lead Finder</h1>
+        <p class="tagline">South African businesses with a phone but <strong>no website</strong> — your leads. 100% free, no API key.</p>
+      </div>
+    </header>
+
+    <main class="wrap">
+      <form id="search-form" class="search-card">
+        <div class="field">
+          <label for="category">Business type</label>
+          <input
+            id="category"
+            name="category"
+            list="category-suggestions"
+            placeholder="e.g. plumbers, hair salons, electricians"
+            autocomplete="off"
+            required
+          />
+          <datalist id="category-suggestions">
+            <option value="plumbers"></option>
+            <option value="electricians"></option>
+            <option value="hair salons"></option>
+            <option value="restaurants"></option>
+            <option value="builders"></option>
+            <option value="mechanics"></option>
+            <option value="painters"></option>
+            <option value="landscapers"></option>
+            <option value="dentists"></option>
+            <option value="lawyers"></option>
+            <option value="accountants"></option>
+            <option value="caterers"></option>
+            <option value="photographers"></option>
+            <option value="tow truck services"></option>
+            <option value="spas"></option>
+          </datalist>
+        </div>
+
+        <div class="field">
+          <label for="area">City / area</label>
+          <input
+            id="area"
+            name="area"
+            list="area-suggestions"
+            placeholder="e.g. Durban, Cape Town, Sandton"
+            autocomplete="off"
+            required
+          />
+          <datalist id="area-suggestions">
+            <option value="Johannesburg"></option>
+            <option value="Cape Town"></option>
+            <option value="Durban"></option>
+            <option value="Pretoria"></option>
+            <option value="Port Elizabeth"></option>
+            <option value="Bloemfontein"></option>
+            <option value="Sandton"></option>
+            <option value="Soweto"></option>
+            <option value="East London"></option>
+            <option value="Polokwane"></option>
+          </datalist>
+        </div>
+
+        <button type="submit" id="search-btn">Find leads</button>
+      </form>
+
+      <div id="status" class="status" hidden></div>
+
+      <section id="results-head" class="results-head" hidden>
+        <div class="counts">
+          <span id="lead-count">0</span> leads found
+          <span class="muted" id="scan-note"></span>
+        </div>
+        <button id="export-btn" class="ghost" type="button">Export CSV</button>
+      </section>
+
+      <ul id="results" class="results"></ul>
+
+      <div class="more-row">
+        <button id="more-btn" class="ghost" type="button" hidden>Load more</button>
+      </div>
+    </main>
+
+    <footer class="wrap foot">
+      <p class="muted">
+        Tip: tick a lead once you've contacted it — your progress is saved in this browser.
+        Use responsibly and follow POPIA rules for direct marketing.
+      </p>
+    </footer>
+
+    <script src="app.js"></script>
+  </body>
+</html>
