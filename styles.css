@@ -126,7 +126,31 @@ button.ghost {
 .lead .dom { margin-top: 6px; font-size: 0.8rem; }
 .dom-none { color: #7af0a8; }
 .dom-found, .dom-found a { color: #ffcf8a; }
-.head-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.head-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+
+.sort-field { display: flex; align-items: center; gap: 6px; font-size: 0.82rem; color: var(--muted); }
+.sort-field select {
+  background: var(--card-2);
+  border: 1px solid var(--line);
+  color: var(--text);
+  border-radius: 9px;
+  padding: 9px 10px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.tier {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  vertical-align: middle;
+}
+.tier-hot { background: #3a1d1d; color: #ffb4a8; border: 1px solid #5a2e2e; }
+.tier-warm { background: #3a311d; color: #ffd98a; border: 1px solid #5a4e2e; }
+.tier-cool { background: var(--card-2); color: var(--muted); border: 1px solid var(--line); }
 
 .lead .actions { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
 .lead .actions a {

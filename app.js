@@ -120,6 +120,7 @@ const sweepBtn = document.getElementById('sweep-btn');
 const jobSweepBtn = document.getElementById('job-sweep-btn');
 const allBtn = document.getElementById('all-btn');
 const verifyBtn = document.getElementById('verify-btn');
+const sortSelect = document.getElementById('sort-select');
 
 function setBusy(busy) {
   searchBtn.disabled = busy;
@@ -132,6 +133,7 @@ function setBusy(busy) {
 if (moreBtn) moreBtn.hidden = true; // no pagination in the browser version
 
 let leads = [];
+let currentSort = 'best';
 let currentQuery = { category: '', area: '' };
 
 // "Contacted" ticks persist in this browser.
@@ -268,10 +270,69 @@ function elementsToLeads(elements) {
   return out;
 }
 
+// ---- lead scoring & sorting ----
+// Higher score = better prospect. Built only from signals we already have,
+// so it needs no extra network calls.
+function leadScore(lead) {
+  let score = 0;
+  if (lead.domainStatus === 'none') score += 50;        // verified: no .co.za/.com site
+  else if (lead.domainStatus === 'found') score -= 40;  // probably already has a site
+  if (lead.whatsapp) score += 20;                       // WhatsApp = easiest to reach
+  if (lead.phone) score += 8;
+  if (lead.address) score += 6;
+  if (lead.mapsUri) score += 3;
+  if (contacted.has(leadId(lead))) score -= 100;        // already handled — sink it
+  return score;
+}
+
+function scoreTier(score) {
+  if (score >= 60) return { cls: 'hot', label: '🔥 Hot' };
+  if (score >= 25) return { cls: 'warm', label: '☀️ Warm' };
+  return { cls: 'cool', label: '• Cool' };
+}
+
+function tierChip(lead) {
+  const t = scoreTier(leadScore(lead));
+  return `<span class="tier tier-${t.cls}">${t.label}</span>`;
+}
+
+// Rank domain states so "verified no site" sorts to the top.
+function domRank(lead) {
+  switch (lead.domainStatus) {
+    case 'none': return 2;
+    case 'found': return -1;
+    default: return 0;
+  }
+}
+
+// Return leads in the order chosen by the sort control (a copy — the
+// underlying list keeps its insertion order for de-duplication and sweeps).
+function sortedLeads() {
+  const arr = [...leads];
+  const byScore = (a, b) => leadScore(b) - leadScore(a);
+  switch (currentSort) {
+    case 'nosite':
+      arr.sort((a, b) => domRank(b) - domRank(a) || byScore(a, b));
+      break;
+    case 'whatsapp':
+      arr.sort((a, b) => (b.whatsapp ? 1 : 0) - (a.whatsapp ? 1 : 0) || byScore(a, b));
+      break;
+    case 'city':
+      arr.sort((a, b) => (a.city || '').localeCompare(b.city || '') || byScore(a, b));
+      break;
+    case 'name':
+      arr.sort((a, b) => a.name.localeCompare(b.name));
+      break;
+    default: // 'best'
+      arr.sort(byScore);
+  }
+  return arr;
+}
+
 // ---- rendering ----
 function renderLeads() {
   resultsEl.innerHTML = '';
-  leads.forEach((lead) => {
+  sortedLeads().forEach((lead) => {
     const id = leadId(lead);
     const isDone = contacted.has(id);
 
@@ -289,7 +350,7 @@ function renderLeads() {
     li.innerHTML = `
       <input type="checkbox" ${isDone ? 'checked' : ''} title="Mark as contacted" />
       <div class="info">
-        <div class="name">${escapeHtml(lead.name)}</div>
+        <div class="name">${escapeHtml(lead.name)} ${tierChip(lead)}</div>
         ${(lead.type || lead.city) ? `<div class="type">${escapeHtml([lead.type, lead.city].filter(Boolean).join(' · '))}</div>` : ''}
         ${lead.address ? `<div class="addr">${escapeHtml(lead.address)}</div>` : ''}
         ${lead.phone ? `<div class="phone">📞 ${escapeHtml(lead.phone)}</div>` : '<div class="phone muted">No phone listed</div>'}
@@ -639,17 +700,23 @@ async function verifyDomains() {
 
 if (verifyBtn) verifyBtn.addEventListener('click', verifyDomains);
 
+if (sortSelect)
+  sortSelect.addEventListener('change', () => {
+    currentSort = sortSelect.value;
+    renderLeads();
+  });
+
 exportBtn.addEventListener('click', () => {
   if (leads.length === 0) return;
   const domLabel = (l) =>
     l.domainStatus === 'none' ? 'no domain found'
       : l.domainStatus === 'found' ? l.domainName
         : '';
-  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Contacted', 'Domain check', 'Google Maps']];
-  leads.forEach((l) => {
+  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Priority', 'Contacted', 'Domain check', 'Google Maps']];
+  sortedLeads().forEach((l) => {
     rows.push([
       l.name, l.type, l.city || currentQuery.area, l.address, l.phone,
-      contacted.has(leadId(l)) ? 'yes' : 'no', domLabel(l), l.mapsUri,
+      scoreTier(leadScore(l)).label.split(' ').pop(), contacted.has(leadId(l)) ? 'yes' : 'no', domLabel(l), l.mapsUri,
     ]);
   });
   const csv = rows

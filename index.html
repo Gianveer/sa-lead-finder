@@ -82,6 +82,7 @@
         <strong>Trades sweep:</strong> ~16 common trades in the city you typed above.
         <strong>Find everything:</strong> all types across all 12 metros — the biggest list.
         Then tap <strong>🔍 Verify no website</strong> to confirm each has no .co.za/.com domain.
+        Leads are ranked <strong>🔥 Hot → Cool</strong> — use <strong>Sort</strong> to reorder.
       </p>
 
       <div id="status" class="status" hidden></div>
@@ -92,6 +93,16 @@
           <span class="muted" id="scan-note"></span>
         </div>
         <div class="head-actions">
+          <label class="sort-field">
+            Sort
+            <select id="sort-select">
+              <option value="best">🔥 Best leads first</option>
+              <option value="nosite">✅ No-website verified</option>
+              <option value="whatsapp">💬 Has WhatsApp</option>
+              <option value="city">🏙️ City</option>
+              <option value="name">🔤 Name A–Z</option>
+            </select>
+          </label>
           <button id="verify-btn" class="ghost" type="button">🔍 Verify no website</button>
           <button id="export-btn" class="ghost" type="button">Export CSV</button>
         </div>
