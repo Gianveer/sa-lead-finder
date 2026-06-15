@@ -75,6 +75,15 @@ button.ghost {
   color: var(--text);
 }
 
+.sweep-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+.sweep-row .muted { font-size: 0.82rem; }
+
 .status {
   margin-top: 18px;
   padding: 14px 16px;

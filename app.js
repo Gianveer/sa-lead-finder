@@ -12,6 +12,25 @@ const OVERPASS_ENDPOINTS = [
   'https://overpass.kumi.systems/api/interpreter',
 ];
 
+// Major South African metros for the "sweep all cities" feature.
+// Each bbox is [south, west, north, east] — pre-set so the sweep needs no geocoding.
+const CITIES = [
+  { name: 'Johannesburg', bbox: [-26.45, 27.78, -26.00, 28.20] },
+  { name: 'Pretoria', bbox: [-25.85, 28.10, -25.65, 28.35] },
+  { name: 'Cape Town', bbox: [-34.20, 18.30, -33.75, 18.80] },
+  { name: 'Durban', bbox: [-30.00, 30.75, -29.70, 31.10] },
+  { name: 'Gqeberha (PE)', bbox: [-34.05, 25.50, -33.80, 25.75] },
+  { name: 'Bloemfontein', bbox: [-29.20, 26.10, -29.05, 26.32] },
+  { name: 'East London', bbox: [-33.10, 27.80, -32.95, 27.97] },
+  { name: 'Pietermaritzburg', bbox: [-29.70, 30.30, -29.55, 30.47] },
+  { name: 'Polokwane', bbox: [-23.95, 29.40, -23.83, 29.52] },
+  { name: 'Mbombela (Nelspruit)', bbox: [-25.52, 30.90, -25.42, 31.07] },
+  { name: 'Kimberley', bbox: [-28.78, 24.69, -28.70, 24.82] },
+  { name: 'George', bbox: [-34.06, 22.38, -33.93, 22.52] },
+];
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
 // Plain-English business type -> OpenStreetMap tags to search for.
 const CATEGORY_TAGS = {
   plumber: [['craft', 'plumber']],
@@ -97,6 +116,7 @@ const scanNote = document.getElementById('scan-note');
 const moreBtn = document.getElementById('more-btn');
 const exportBtn = document.getElementById('export-btn');
 const searchBtn = document.getElementById('search-btn');
+const sweepBtn = document.getElementById('sweep-btn');
 
 if (moreBtn) moreBtn.hidden = true; // no pagination in the browser version
 
@@ -259,7 +279,7 @@ function renderLeads() {
       <input type="checkbox" ${isDone ? 'checked' : ''} title="Mark as contacted" />
       <div class="info">
         <div class="name">${escapeHtml(lead.name)}</div>
-        ${lead.type ? `<div class="type">${escapeHtml(lead.type)}</div>` : ''}
+        ${(lead.type || lead.city) ? `<div class="type">${escapeHtml([lead.type, lead.city].filter(Boolean).join(' · '))}</div>` : ''}
         ${lead.address ? `<div class="addr">${escapeHtml(lead.address)}</div>` : ''}
         ${lead.phone ? `<div class="phone">📞 ${escapeHtml(lead.phone)}</div>` : '<div class="phone muted">No phone listed</div>'}
       </div>
@@ -328,12 +348,68 @@ form.addEventListener('submit', (e) => {
   runSearch();
 });
 
+// Sweep one business type across every major SA city, pooling + de-duplicating.
+async function runSweep() {
+  const category = document.getElementById('category').value.trim();
+  if (!category) {
+    setStatus('Enter a business type first, then sweep.', true);
+    return;
+  }
+  currentQuery = { category, area: 'major SA cities' };
+  searchBtn.disabled = true;
+  sweepBtn.disabled = true;
+  leads = [];
+  renderLeads();
+
+  const resolved = resolveCategory(category);
+  const seen = new Set();
+  let scannedTotal = 0;
+
+  try {
+    for (let i = 0; i < CITIES.length; i++) {
+      const city = CITIES[i];
+      setStatus(`Sweeping ${city.name}… (${i + 1}/${CITIES.length}) — ${leads.length} leads so far`);
+
+      let data;
+      try {
+        data = await queryOverpass(buildOverpassQuery(resolved, city.bbox));
+      } catch {
+        continue; // this city's mirror was busy — skip it and keep going
+      }
+
+      const elements = data.elements || [];
+      scannedTotal += elements.length;
+      for (const lead of elementsToLeads(elements)) {
+        const id = leadId(lead);
+        if (seen.has(id)) continue; // already found in another city
+        seen.add(id);
+        lead.city = city.name;
+        leads.push(lead);
+      }
+      renderLeads();
+      scanNote.textContent = `(checked ${scannedTotal} businesses across ${i + 1} cities)`;
+
+      if (i < CITIES.length - 1) await sleep(1200); // be polite to the free service
+    }
+    setStatus(
+      leads.length
+        ? null
+        : 'No website-less businesses found in the swept cities. Try a more common business type.'
+    );
+  } finally {
+    searchBtn.disabled = false;
+    sweepBtn.disabled = false;
+  }
+}
+
+sweepBtn.addEventListener('click', runSweep);
+
 exportBtn.addEventListener('click', () => {
   if (leads.length === 0) return;
-  const rows = [['Name', 'Type', 'Address', 'Phone', 'Contacted', 'Google Maps']];
+  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Contacted', 'Google Maps']];
   leads.forEach((l) => {
     rows.push([
-      l.name, l.type, l.address, l.phone,
+      l.name, l.type, l.city || currentQuery.area, l.address, l.phone,
       contacted.has(leadId(l)) ? 'yes' : 'no', l.mapsUri,
     ]);
   });
