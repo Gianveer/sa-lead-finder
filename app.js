@@ -117,6 +117,13 @@ const moreBtn = document.getElementById('more-btn');
 const exportBtn = document.getElementById('export-btn');
 const searchBtn = document.getElementById('search-btn');
 const sweepBtn = document.getElementById('sweep-btn');
+const jobSweepBtn = document.getElementById('job-sweep-btn');
+
+function setBusy(busy) {
+  searchBtn.disabled = busy;
+  if (sweepBtn) sweepBtn.disabled = busy;
+  if (jobSweepBtn) jobSweepBtn.disabled = busy;
+}
 
 if (moreBtn) moreBtn.hidden = true; // no pagination in the browser version
 
@@ -303,7 +310,7 @@ function renderLeads() {
 
 // ---- search flow ----
 async function runSearch() {
-  searchBtn.disabled = true;
+  setBusy(true);
   setStatus('Searching OpenStreetMap for businesses…');
   try {
     const bbox = await geocodeArea(currentQuery.area);
@@ -335,7 +342,7 @@ async function runSearch() {
   } catch (err) {
     setStatus(`Something went wrong: ${err.message}`, true);
   } finally {
-    searchBtn.disabled = false;
+    setBusy(false);
   }
 }
 
@@ -356,8 +363,7 @@ async function runSweep() {
     return;
   }
   currentQuery = { category, area: 'major SA cities' };
-  searchBtn.disabled = true;
-  sweepBtn.disabled = true;
+  setBusy(true);
   leads = [];
   renderLeads();
 
@@ -397,12 +403,76 @@ async function runSweep() {
         : 'No website-less businesses found in the swept cities. Try a more common business type.'
     );
   } finally {
-    searchBtn.disabled = false;
-    sweepBtn.disabled = false;
+    setBusy(false);
   }
 }
 
 sweepBtn.addEventListener('click', runSweep);
+
+// Sweep many common trades/jobs across a single city.
+const JOB_TYPES = [
+  'plumber', 'electrician', 'builder', 'painter', 'carpenter', 'mechanic',
+  'landscaper', 'locksmith', 'caterer', 'photographer', 'hairdresser',
+  'beauty salon', 'spa', 'butcher', 'bakery', 'florist',
+];
+
+async function runJobSweep() {
+  const area = document.getElementById('area').value.trim();
+  if (!area) {
+    setStatus('Enter a city/area above first — the trades sweep searches one city.', true);
+    return;
+  }
+  currentQuery = { category: 'all trades', area };
+  setBusy(true);
+  leads = [];
+  renderLeads();
+  setStatus(`Locating ${area}…`);
+
+  try {
+    const bbox = await geocodeArea(area);
+    if (!bbox) {
+      setStatus(`Couldn't find "${area}" in South Africa. Try a nearby city.`, true);
+      return;
+    }
+    const seen = new Set();
+    let scannedTotal = 0;
+
+    for (let i = 0; i < JOB_TYPES.length; i++) {
+      const job = JOB_TYPES[i];
+      setStatus(`Sweeping ${job}s in ${area}… (${i + 1}/${JOB_TYPES.length}) — ${leads.length} leads so far`);
+
+      let data;
+      try {
+        data = await queryOverpass(buildOverpassQuery(resolveCategory(job), bbox));
+      } catch {
+        continue; // busy mirror — skip this trade and continue
+      }
+
+      const elements = data.elements || [];
+      scannedTotal += elements.length;
+      for (const lead of elementsToLeads(elements)) {
+        const id = leadId(lead);
+        if (seen.has(id)) continue;
+        seen.add(id);
+        lead.city = area;
+        leads.push(lead);
+      }
+      renderLeads();
+      scanNote.textContent = `(checked ${scannedTotal} businesses across ${i + 1} trades)`;
+
+      if (i < JOB_TYPES.length - 1) await sleep(1200);
+    }
+    setStatus(
+      leads.length
+        ? null
+        : `No website-less businesses found across trades in ${area}. Try a bigger city.`
+    );
+  } finally {
+    setBusy(false);
+  }
+}
+
+jobSweepBtn.addEventListener('click', runJobSweep);
 
 exportBtn.addEventListener('click', () => {
   if (leads.length === 0) return;

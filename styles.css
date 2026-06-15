@@ -83,6 +83,7 @@ button.ghost {
   flex-wrap: wrap;
 }
 .sweep-row .muted { font-size: 0.82rem; }
+.sweep-hint { font-size: 0.8rem; margin: 8px 0 0; line-height: 1.5; }
 
 .status {
   margin-top: 18px;
