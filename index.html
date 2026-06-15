@@ -80,7 +80,8 @@
       <p class="sweep-hint muted">
         <strong>Cities sweep:</strong> one business type across 12 metros (ignores the city box).
         <strong>Trades sweep:</strong> ~16 common trades in the city you typed above.
-        <strong>Find everything:</strong> all trades across all 12 metros — the biggest list (~30–40s).
+        <strong>Find everything:</strong> all types across all 12 metros — the biggest list.
+        Then tap <strong>🔍 Verify no website</strong> to confirm each has no .co.za/.com domain.
       </p>
 
       <div id="status" class="status" hidden></div>
@@ -90,7 +91,10 @@
           <span id="lead-count">0</span> leads found
           <span class="muted" id="scan-note"></span>
         </div>
-        <button id="export-btn" class="ghost" type="button">Export CSV</button>
+        <div class="head-actions">
+          <button id="verify-btn" class="ghost" type="button">🔍 Verify no website</button>
+          <button id="export-btn" class="ghost" type="button">Export CSV</button>
+        </div>
       </section>
 
       <ul id="results" class="results"></ul>

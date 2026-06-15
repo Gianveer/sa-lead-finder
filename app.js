@@ -119,12 +119,14 @@ const searchBtn = document.getElementById('search-btn');
 const sweepBtn = document.getElementById('sweep-btn');
 const jobSweepBtn = document.getElementById('job-sweep-btn');
 const allBtn = document.getElementById('all-btn');
+const verifyBtn = document.getElementById('verify-btn');
 
 function setBusy(busy) {
   searchBtn.disabled = busy;
   if (sweepBtn) sweepBtn.disabled = busy;
   if (jobSweepBtn) jobSweepBtn.disabled = busy;
   if (allBtn) allBtn.disabled = busy;
+  if (verifyBtn) verifyBtn.disabled = busy;
 }
 
 if (moreBtn) moreBtn.hidden = true; // no pagination in the browser version
@@ -291,6 +293,7 @@ function renderLeads() {
         ${(lead.type || lead.city) ? `<div class="type">${escapeHtml([lead.type, lead.city].filter(Boolean).join(' · '))}</div>` : ''}
         ${lead.address ? `<div class="addr">${escapeHtml(lead.address)}</div>` : ''}
         ${lead.phone ? `<div class="phone">📞 ${escapeHtml(lead.phone)}</div>` : '<div class="phone muted">No phone listed</div>'}
+        ${domainBadge(lead)}
       </div>
       <div class="actions">${actions.join('')}</div>
     `;
@@ -411,12 +414,32 @@ async function runSweep() {
 
 sweepBtn.addEventListener('click', runSweep);
 
-// Sweep many common trades/jobs across a single city.
+// Common small-business types most likely to have no website. Used by the
+// "trades" and "everything" sweeps (all unioned into one query each).
 const JOB_TYPES = [
   'plumber', 'electrician', 'builder', 'painter', 'carpenter', 'mechanic',
   'landscaper', 'locksmith', 'caterer', 'photographer', 'hairdresser',
-  'beauty salon', 'spa', 'butcher', 'bakery', 'florist',
+  'beauty salon', 'spa', 'butcher', 'bakery', 'florist', 'restaurant',
+  'cafe', 'takeaway', 'guest house', 'gym', 'pharmacy', 'tattoo', 'optician',
+  'vet', 'car wash', 'tyres', 'hardware store', 'clothing shop',
+  'furniture shop', 'accountant', 'lawyer', 'dentist', 'nursery',
 ];
+
+// All trade tags unioned into one de-duplicated filter list.
+function allTradeTags() {
+  const seenTag = new Set();
+  const tags = [];
+  for (const job of JOB_TYPES) {
+    for (const t of resolveCategory(job).tags || []) {
+      const key = t.join('=');
+      if (!seenTag.has(key)) {
+        seenTag.add(key);
+        tags.push(t);
+      }
+    }
+  }
+  return tags;
+}
 
 async function runJobSweep() {
   const area = document.getElementById('area').value.trim();
@@ -436,38 +459,24 @@ async function runJobSweep() {
       setStatus(`Couldn't find "${area}" in South Africa. Try a nearby city.`, true);
       return;
     }
-    const seen = new Set();
-    let scannedTotal = 0;
+    setStatus(`Searching all business types in ${area}…`);
 
-    for (let i = 0; i < JOB_TYPES.length; i++) {
-      const job = JOB_TYPES[i];
-      setStatus(`Sweeping ${job}s in ${area}… (${i + 1}/${JOB_TYPES.length}) — ${leads.length} leads so far`);
-
-      let data;
-      try {
-        data = await queryOverpass(buildOverpassQuery(resolveCategory(job), bbox));
-      } catch {
-        continue; // busy mirror — skip this trade and continue
-      }
-
-      const elements = data.elements || [];
-      scannedTotal += elements.length;
-      for (const lead of elementsToLeads(elements)) {
-        const id = leadId(lead);
-        if (seen.has(id)) continue;
-        seen.add(id);
-        lead.city = area;
-        leads.push(lead);
-      }
-      renderLeads();
-      scanNote.textContent = `(checked ${scannedTotal} businesses across ${i + 1} trades)`;
-
-      if (i < JOB_TYPES.length - 1) await sleep(1200);
+    let data;
+    try {
+      data = await queryOverpass(buildOverpassQuery({ tags: allTradeTags(), nameTerm: null }, bbox, 2500));
+    } catch {
+      setStatus('The free map service is busy right now. Wait a few seconds and try again.', true);
+      return;
     }
+
+    const elements = data.elements || [];
+    leads = elementsToLeads(elements).map((l) => ({ ...l, city: area }));
+    renderLeads();
+    scanNote.textContent = `(checked ${elements.length} businesses across all types)`;
     setStatus(
       leads.length
         ? null
-        : `No website-less businesses found across trades in ${area}. Try a bigger city.`
+        : `No website-less businesses found in ${area}. Try a bigger city.`
     );
   } finally {
     setBusy(false);
@@ -484,18 +493,7 @@ async function runEverything() {
   leads = [];
   renderLeads();
 
-  // Collect every trade's tags into a single de-duplicated filter list.
-  const seenTag = new Set();
-  const allTags = [];
-  for (const job of JOB_TYPES) {
-    for (const t of resolveCategory(job).tags || []) {
-      const key = t.join('=');
-      if (!seenTag.has(key)) {
-        seenTag.add(key);
-        allTags.push(t);
-      }
-    }
-  }
+  const allTags = allTradeTags();
 
   const seen = new Set();
   let scannedTotal = 0;
@@ -537,13 +535,121 @@ async function runEverything() {
 
 allBtn.addEventListener('click', runEverything);
 
+// ---- domain verification (free, via public DNS-over-HTTPS) ----
+function domainBadge(lead) {
+  switch (lead.domainStatus) {
+    case 'none':
+      return '<div class="dom dom-none">✅ no .co.za / .com domain found</div>';
+    case 'found':
+      return `<div class="dom dom-found">🌐 possible site: <a href="https://${escapeHtml(lead.domainName)}" target="_blank" rel="noopener">${escapeHtml(lead.domainName)}</a></div>`;
+    case 'checking':
+      return '<div class="dom muted">checking domain…</div>';
+    case 'unknown':
+      return '<div class="dom muted">domain check n/a</div>';
+    default:
+      return '';
+  }
+}
+
+// Turn a business name into a candidate domain label (e.g. "Joe's Plumbing" -> "joesplumbing").
+function slugifyName(name) {
+  return name
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/\b(pty|ltd|cc|inc|the|and|trading|holdings)\b/g, '')
+    .replace(/[^a-z0-9]/g, '')
+    .slice(0, 40);
+}
+
+// Ask a public DoH resolver whether a domain resolves.
+// Returns true (exists), false (NXDOMAIN), or null (couldn't tell).
+async function dohExists(domain) {
+  const resolvers = [
+    `https://dns.google/resolve?name=${encodeURIComponent(domain)}&type=A`,
+    `https://cloudflare-dns.com/dns-query?name=${encodeURIComponent(domain)}&type=A`,
+  ];
+  for (const url of resolvers) {
+    try {
+      const r = await fetch(url, { headers: { Accept: 'application/dns-json' } });
+      if (!r.ok) continue;
+      const j = await r.json();
+      if (j.Status === 3) return false; // NXDOMAIN — no such domain
+      if (Array.isArray(j.Answer) && j.Answer.length) return true;
+      if (j.Status === 0) return true; // exists but no A record (parked / mail-only)
+      return false;
+    } catch {
+      // try the next resolver
+    }
+  }
+  return null;
+}
+
+async function checkLeadDomain(lead) {
+  const slug = slugifyName(lead.name);
+  if (slug.length < 3) {
+    lead.domainStatus = 'unknown';
+    return;
+  }
+  lead.domainStatus = 'checking';
+  for (const tld of ['co.za', 'com']) {
+    const exists = await dohExists(`${slug}.${tld}`);
+    if (exists === true) {
+      lead.domainStatus = 'found';
+      lead.domainName = `${slug}.${tld}`;
+      return;
+    }
+    if (exists === null) {
+      lead.domainStatus = 'unknown';
+      return;
+    }
+  }
+  lead.domainStatus = 'none'; // no .co.za and no .com -> strong "no website"
+}
+
+// Verify the whole current list, a few at a time, updating cards as they resolve.
+async function verifyDomains() {
+  const queue = leads.filter((l) => !l.domainStatus || l.domainStatus === 'unknown');
+  if (!queue.length) {
+    setStatus(leads.length ? 'All current leads are already domain-checked.' : 'Find some leads first.');
+    return;
+  }
+  setBusy(true);
+  let idx = 0;
+  let done = 0;
+  async function worker() {
+    while (idx < queue.length) {
+      const lead = queue[idx++];
+      await checkLeadDomain(lead);
+      done++;
+      if (done % 8 === 0) {
+        renderLeads();
+        setStatus(`Checking domains… ${done}/${queue.length}`);
+      }
+    }
+  }
+  try {
+    await Promise.all(Array.from({ length: 6 }, worker)); // 6 in parallel
+    renderLeads();
+    const clean = leads.filter((l) => l.domainStatus === 'none').length;
+    setStatus(`Domain check done — ${clean} of ${leads.length} have no .co.za/.com site.`);
+  } finally {
+    setBusy(false);
+  }
+}
+
+if (verifyBtn) verifyBtn.addEventListener('click', verifyDomains);
+
 exportBtn.addEventListener('click', () => {
   if (leads.length === 0) return;
-  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Contacted', 'Google Maps']];
+  const domLabel = (l) =>
+    l.domainStatus === 'none' ? 'no domain found'
+      : l.domainStatus === 'found' ? l.domainName
+        : '';
+  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Contacted', 'Domain check', 'Google Maps']];
   leads.forEach((l) => {
     rows.push([
       l.name, l.type, l.city || currentQuery.area, l.address, l.phone,
-      contacted.has(leadId(l)) ? 'yes' : 'no', l.mapsUri,
+      contacted.has(leadId(l)) ? 'yes' : 'no', domLabel(l), l.mapsUri,
     ]);
   });
   const csv = rows
