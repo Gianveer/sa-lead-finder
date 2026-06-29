@@ -167,9 +167,18 @@ function firstTag(tags, keys) {
   return '';
 }
 
-// Turn a South African phone number into a wa.me WhatsApp link.
-function toWhatsApp(phone) {
-  if (!phone) return null;
+// Is this a South African MOBILE number? Only mobiles are on WhatsApp.
+// Mobiles are 27 + (6x / 7x / 8x) + 7 digits. Landlines (011, 021, 031…) and
+// the 80/86/87 service ranges are not on WhatsApp, so we skip them.
+function isSaMobile(d) {
+  if (!/^27[678]\d{8}$/.test(d)) return false; // must be 27 + 9 digits starting 6/7/8
+  if (/^278[067]/.test(d)) return false; // 080 toll-free, 086 share-call, 087 VoIP
+  return true;
+}
+
+// Normalise a phone number to international digits (27...), or '' if unusable.
+function normalizePhone(phone) {
+  if (!phone) return '';
   let d = phone.replace(/[^\d+]/g, '').replace(/\+/g, '');
   if (d.startsWith('27')) {
     // already has country code
@@ -178,7 +187,13 @@ function toWhatsApp(phone) {
   } else if (d.length === 9) {
     d = '27' + d;
   }
-  return d.length >= 10 ? `https://wa.me/${d}` : null;
+  return d;
+}
+
+// Turn a number into a wa.me link, but only if it's actually a mobile/WhatsApp number.
+function toWhatsApp(phone) {
+  const d = normalizePhone(phone);
+  return isSaMobile(d) ? `https://wa.me/${d}` : null;
 }
 
 // Your pitch. Edit these to change the WhatsApp message that gets pre-typed.
