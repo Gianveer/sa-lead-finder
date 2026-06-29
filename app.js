@@ -181,6 +181,26 @@ function toWhatsApp(phone) {
   return d.length >= 10 ? `https://wa.me/${d}` : null;
 }
 
+// Your pitch. Edit these to change the WhatsApp message that gets pre-typed.
+const PITCH = { businessName: 'Convertly', website: 'convertly.co.za', firstName: 'Gianveer' };
+
+// A friendlier noun for the business type, used in the message.
+function pitchNoun(type) {
+  const map = {
+    hairdresser: 'salon', beauty: 'salon', restaurant: 'restaurant', cafe: 'cafe',
+    'fast food': 'takeaway', 'car repair': 'garage', dentist: 'practice',
+    doctors: 'practice', 'fitness centre': 'gym', pharmacy: 'pharmacy',
+  };
+  return map[type] || 'business';
+}
+
+// The personalized message, pre-typed into WhatsApp when you tap the button.
+function waMessage(lead) {
+  const noun = pitchNoun(lead.type);
+  const where = lead.city ? ` in ${lead.city}` : '';
+  return `Hi, is this ${lead.name}? I came across your ${noun}${where} but couldn't find a website for you online. I'm ${PITCH.firstName} from ${PITCH.businessName} and I build simple, fast websites for local businesses (${PITCH.website}). I'd be happy to put together a free homepage mockup so you can see what it would look like, no cost or pressure. Would that be useful?`;
+}
+
 function buildAddress(tags) {
   const street = [tags['addr:housenumber'], tags['addr:street']].filter(Boolean).join(' ');
   return [street, tags['addr:suburb'], tags['addr:city']].filter(Boolean).join(', ');
@@ -342,7 +362,7 @@ function renderLeads() {
 
     const actions = [];
     if (lead.whatsapp)
-      actions.push(`<a class="a-wa" href="${lead.whatsapp}" target="_blank" rel="noopener">WhatsApp</a>`);
+      actions.push(`<a class="a-wa" href="${lead.whatsapp}?text=${encodeURIComponent(waMessage(lead))}" target="_blank" rel="noopener">WhatsApp</a>`);
     if (lead.phone)
       actions.push(`<a class="a-call" href="tel:${escapeHtml(lead.phone)}">Call</a>`);
     if (lead.mapsUri)
