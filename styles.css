@@ -166,7 +166,12 @@ button.ghost {
 }
 .a-wa { background: #1f3d2b; color: #7af0a8; border: 1px solid #2e5a40; }
 .a-call { background: #1d2b47; color: #9cc1ff; border: 1px solid #2c4673; }
+.a-email { background: #3a2b14; color: #ffce8a; border: 1px solid #5c451f; }
+.a-find { background: transparent; color: #ffce8a; border: 1px dashed #5c451f; }
+.a-fb { background: #1b2a4a; color: #8ab4ff; border: 1px solid #2c4673; }
+.a-ig { background: #3a1c33; color: #ff9ad4; border: 1px solid #5c2e51; }
 .a-map { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+.lead .email { font-size: 0.85rem; color: var(--muted); margin-top: 2px; word-break: break-all; }
 
 .more-row { text-align: center; margin: 22px 0 40px; }
 

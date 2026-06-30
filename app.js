@@ -221,6 +221,34 @@ function buildAddress(tags) {
   return [street, tags['addr:suburb'], tags['addr:city']].filter(Boolean).join(', ');
 }
 
+// Normalise an OSM social value (handle or URL) into a full link, or '' if none.
+function socialUrl(raw, domain) {
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  return `https://${domain}/${String(raw).replace(/^\/+/, '')}`;
+}
+
+// A mailto: link with your pitch pre-written, for leads that have an email.
+function emailLink(lead) {
+  const subject = `A free homepage idea for ${lead.name}`;
+  const body = `Hi ${lead.name} team,
+
+I came across ${lead.name}${lead.city ? ` in ${lead.city}` : ''} but couldn't find a website for you online. I'm ${PITCH.firstName} from ${PITCH.businessName} and I build simple, fast websites for local businesses (${PITCH.website}).
+
+I'd be happy to put together a free homepage mockup so you can see exactly what it would look like, no cost or pressure. Would a quick chat this week work?
+
+Cheers,
+${PITCH.firstName}`;
+  return `mailto:${lead.email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+}
+
+// A Google search that surfaces a business's email in seconds (the reliable,
+// compliant alternative to scraping). Opens in a new tab; you grab + paste.
+function findEmailSearch(lead) {
+  const q = `"${lead.name}" ${lead.city || ''} email contact`.trim();
+  return `https://www.google.com/search?q=${encodeURIComponent(q)}`;
+}
+
 function resolveCategory(category) {
   const key = category.trim().toLowerCase();
   if (CATEGORY_TAGS[key]) return { tags: CATEGORY_TAGS[key], nameTerm: null };
@@ -294,12 +322,20 @@ function elementsToLeads(elements) {
       'shop', 'amenity', 'craft', 'office', 'leisure', 'tourism', 'healthcare',
     ]);
 
+    // Contact extras OSM sometimes carries — surfaced so you can email/DM them.
+    const email = firstTag(tags, ['email', 'contact:email']);
+    const fbRaw = firstTag(tags, ['contact:facebook', 'facebook']);
+    const instaRaw = firstTag(tags, ['contact:instagram', 'instagram']);
+
     out.push({
       name,
       type: typeRaw.replace(/_/g, ' '),
       address: buildAddress(tags),
       phone,
       whatsapp: toWhatsApp(phone),
+      email,
+      facebook: socialUrl(fbRaw, 'facebook.com'),
+      instagram: socialUrl(instaRaw, 'instagram.com'),
       mapsUri: lat && lon ? `https://www.google.com/maps/search/?api=1&query=${lat},${lon}` : '',
     });
   }
@@ -380,6 +416,15 @@ function renderLeads() {
       actions.push(`<a class="a-wa" href="${lead.whatsapp}?text=${encodeURIComponent(waMessage(lead))}" target="_blank" rel="noopener">WhatsApp</a>`);
     if (lead.phone)
       actions.push(`<a class="a-call" href="tel:${escapeHtml(lead.phone)}">Call</a>`);
+    // Email enrichment: email them if we have it, otherwise a one-tap way to find it.
+    if (lead.email)
+      actions.push(`<a class="a-email" href="${emailLink(lead)}">Email</a>`);
+    else
+      actions.push(`<a class="a-find" href="${findEmailSearch(lead)}" target="_blank" rel="noopener">Find email</a>`);
+    if (lead.facebook)
+      actions.push(`<a class="a-fb" href="${escapeHtml(lead.facebook)}" target="_blank" rel="noopener">Facebook</a>`);
+    if (lead.instagram)
+      actions.push(`<a class="a-ig" href="${escapeHtml(lead.instagram)}" target="_blank" rel="noopener">Instagram</a>`);
     if (lead.mapsUri)
       actions.push(`<a class="a-map" href="${lead.mapsUri}" target="_blank" rel="noopener">Map</a>`);
 
@@ -390,6 +435,7 @@ function renderLeads() {
         ${(lead.type || lead.city) ? `<div class="type">${escapeHtml([lead.type, lead.city].filter(Boolean).join(' · '))}</div>` : ''}
         ${lead.address ? `<div class="addr">${escapeHtml(lead.address)}</div>` : ''}
         ${lead.phone ? `<div class="phone">📞 ${escapeHtml(lead.phone)}</div>` : '<div class="phone muted">No phone listed</div>'}
+        ${lead.email ? `<div class="email">✉️ ${escapeHtml(lead.email)}</div>` : ''}
         ${domainBadge(lead)}
       </div>
       <div class="actions">${actions.join('')}</div>
@@ -767,10 +813,10 @@ exportBtn.addEventListener('click', () => {
     l.domainStatus === 'none' ? 'no domain found'
       : l.domainStatus === 'found' ? l.domainName
         : '';
-  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Priority', 'Contacted', 'Domain check', 'Google Maps']];
+  const rows = [['Name', 'Type', 'City', 'Address', 'Phone', 'Email', 'Facebook', 'Priority', 'Contacted', 'Domain check', 'Google Maps']];
   sortedLeads().forEach((l) => {
     rows.push([
-      l.name, l.type, l.city || currentQuery.area, l.address, l.phone,
+      l.name, l.type, l.city || currentQuery.area, l.address, l.phone, l.email || '', l.facebook || '',
       scoreTier(leadScore(l)).label.split(' ').pop(), contacted.has(leadId(l)) ? 'yes' : 'no', domLabel(l), l.mapsUri,
     ]);
   });
